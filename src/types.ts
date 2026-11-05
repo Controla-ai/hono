@@ -120,6 +120,33 @@ export type ErrorHandler<E extends Env = any> = (
 
 ////////////////////////////////////////
 //////                            //////
+//////     Middleware needs       //////
+//////                            //////
+////////////////////////////////////////
+
+declare const middlewareNeeds: unique symbol
+
+type VariablesOf<E> = E extends { Variables: infer V } ? V : {}
+
+/**
+ * Marks a middleware as needing variables that an earlier middleware sets.
+ * The marker is a function type so that it is checked contravariantly: a slot
+ * whose earlier variables are `V` accepts the middleware only if `V` has all it needs.
+ */
+export type NeedsVariables<N extends Env> = {
+  readonly [middlewareNeeds]?: (variables: VariablesOf<N>) => void
+}
+
+/**
+ * Added to each handler slot of the route methods. Middleware without the marker
+ * is unaffected; marked middleware must find its needs among the earlier variables.
+ */
+export type ProvidesNeeds<Prev> = {
+  readonly [middlewareNeeds]?: (variables: VariablesOf<Prev>) => void
+}
+
+////////////////////////////////////////
+//////                            //////
 //////     HandlerInterface       //////
 //////                            //////
 ////////////////////////////////////////
@@ -156,7 +183,7 @@ export interface HandlerInterface<
     E3 extends Env = IntersectNonAnyTypes<[E, E2]>,
     M1 extends H<E2, P, I> = H<E2, P, I>,
   >(
-    ...handlers: [H<E2, P, I> & M1, H<E3, P, I2, R>]
+    ...handlers: [H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>, H<E3, P, I2, R>]
   ): HonoBase<
     IntersectNonAnyTypes<[E, E2, E3]>,
     S & ToSchema<M, P, I2, MergeTypedResponse<R> | MergeMiddlewareResponse<M1>>,
@@ -195,7 +222,7 @@ export interface HandlerInterface<
     M1 extends H<E2, P, I> = H<E2, P, I>,
     M2 extends H<E3, P, I2> = H<E3, P, I2>,
   >(
-    ...handlers: [H<E2, P, I> & M1, H<E3, P, I2> & M2, H<E4, P, I3, R>]
+    ...handlers: [H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>, H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>, H<E4, P, I3, R>]
   ): HonoBase<
     IntersectNonAnyTypes<[E, E2, E3, E4]>,
     S &
@@ -222,7 +249,7 @@ export interface HandlerInterface<
     M1 extends H<E2, MergedPath, I> = H<E2, MergedPath, I>,
   >(
     path: P,
-    ...handlers: [H<E2, MergedPath, I> & M1, H<E3, MergedPath, I2, R>]
+    ...handlers: [H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>, H<E3, MergedPath, I2, R>]
   ): HonoBase<
     E,
     AddSchemaIfHasResponse<
@@ -254,7 +281,7 @@ export interface HandlerInterface<
     M2 extends H<E3, P, I2> = H<E3, P, I2>,
     M3 extends H<E4, P, I3> = H<E4, P, I3>,
   >(
-    ...handlers: [H<E2, P, I> & M1, H<E3, P, I2> & M2, H<E4, P, I3> & M3, H<E5, P, I4, R>]
+    ...handlers: [H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>, H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>, H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>, H<E5, P, I4, R>]
   ): HonoBase<
     IntersectNonAnyTypes<[E, E2, E3, E4, E5]>,
     S &
@@ -287,7 +314,7 @@ export interface HandlerInterface<
     M2 extends H<E3, MergedPath, I2> = H<E3, MergedPath, I2>,
   >(
     path: P,
-    ...handlers: [H<E2, MergedPath, I> & M1, H<E3, MergedPath, I2> & M2, H<E4, MergedPath, I3, R>]
+    ...handlers: [H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>, H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>, H<E4, MergedPath, I3, R>]
   ): HonoBase<
     E,
     AddSchemaIfHasResponse<
@@ -323,10 +350,10 @@ export interface HandlerInterface<
     M4 extends H<E5, P, I4> = H<E5, P, I4>,
   >(
     ...handlers: [
-      H<E2, P, I> & M1,
-      H<E3, P, I2> & M2,
-      H<E4, P, I3> & M3,
-      H<E5, P, I4> & M4,
+      H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, P, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
       H<E6, P, I5, R>,
     ]
   ): HonoBase<
@@ -366,9 +393,9 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
       H<E5, MergedPath, I4, R>,
     ]
   ): HonoBase<
@@ -412,11 +439,11 @@ export interface HandlerInterface<
     M5 extends H<E6, P, I5> = H<E6, P, I5>,
   >(
     ...handlers: [
-      H<E2, P, I> & M1,
-      H<E3, P, I2> & M2,
-      H<E4, P, I3> & M3,
-      H<E5, P, I4> & M4,
-      H<E6, P, I5> & M5,
+      H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, P, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, P, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
       H<E7, P, I6, R>,
     ]
   ): HonoBase<
@@ -460,10 +487,10 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
-      H<E5, MergedPath, I4> & M4,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, MergedPath, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
       H<E6, MergedPath, I5, R>,
     ]
   ): HonoBase<
@@ -511,12 +538,12 @@ export interface HandlerInterface<
     M6 extends H<E7, P, I6> = H<E7, P, I6>,
   >(
     ...handlers: [
-      H<E2, P, I> & M1,
-      H<E3, P, I2> & M2,
-      H<E4, P, I3> & M3,
-      H<E5, P, I4> & M4,
-      H<E6, P, I5> & M5,
-      H<E7, P, I6> & M6,
+      H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, P, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, P, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, P, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
       H<E8, P, I7, R>,
     ]
   ): HonoBase<
@@ -564,11 +591,11 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
-      H<E5, MergedPath, I4> & M4,
-      H<E6, MergedPath, I5> & M5,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, MergedPath, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, MergedPath, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
       H<E7, MergedPath, I6, R>,
     ]
   ): HonoBase<
@@ -620,13 +647,13 @@ export interface HandlerInterface<
     M7 extends H<E8, P, I7> = H<E8, P, I7>,
   >(
     ...handlers: [
-      H<E2, P, I> & M1,
-      H<E3, P, I2> & M2,
-      H<E4, P, I3> & M3,
-      H<E5, P, I4> & M4,
-      H<E6, P, I5> & M5,
-      H<E7, P, I6> & M6,
-      H<E8, P, I7> & M7,
+      H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, P, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, P, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, P, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
+      H<E8, P, I7> & M7 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7]>>,
       H<E9, P, I8, R>,
     ]
   ): HonoBase<
@@ -678,12 +705,12 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
-      H<E5, MergedPath, I4> & M4,
-      H<E6, MergedPath, I5> & M5,
-      H<E7, MergedPath, I6> & M6,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, MergedPath, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, MergedPath, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, MergedPath, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
       H<E8, MergedPath, I7, R>,
     ]
   ): HonoBase<
@@ -739,14 +766,14 @@ export interface HandlerInterface<
     M8 extends H<E9, P, I8> = H<E9, P, I8>,
   >(
     ...handlers: [
-      H<E2, P, I> & M1,
-      H<E3, P, I2> & M2,
-      H<E4, P, I3> & M3,
-      H<E5, P, I4> & M4,
-      H<E6, P, I5> & M5,
-      H<E7, P, I6> & M6,
-      H<E8, P, I7> & M7,
-      H<E9, P, I8> & M8,
+      H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, P, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, P, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, P, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
+      H<E8, P, I7> & M7 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7]>>,
+      H<E9, P, I8> & M8 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7, E8]>>,
       H<E10, P, I9, R>,
     ]
   ): HonoBase<
@@ -802,13 +829,13 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
-      H<E5, MergedPath, I4> & M4,
-      H<E6, MergedPath, I5> & M5,
-      H<E7, MergedPath, I6> & M6,
-      H<E8, MergedPath, I7> & M7,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, MergedPath, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, MergedPath, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, MergedPath, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
+      H<E8, MergedPath, I7> & M7 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7]>>,
       H<E9, MergedPath, I8, R>,
     ]
   ): HonoBase<
@@ -868,15 +895,15 @@ export interface HandlerInterface<
     M9 extends H<E10, P, I9> = H<E10, P, I9>,
   >(
     ...handlers: [
-      H<E2, P, I> & M1,
-      H<E3, P, I2> & M2,
-      H<E4, P, I3> & M3,
-      H<E5, P, I4> & M4,
-      H<E6, P, I5> & M5,
-      H<E7, P, I6> & M6,
-      H<E8, P, I7> & M7,
-      H<E9, P, I8> & M8,
-      H<E10, P, I9> & M9,
+      H<E2, P, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, P, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, P, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, P, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, P, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, P, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
+      H<E8, P, I7> & M7 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7]>>,
+      H<E9, P, I8> & M8 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7, E8]>>,
+      H<E10, P, I9> & M9 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7, E8, E9]>>,
       H<E11, P, I10, R>,
     ]
   ): HonoBase<
@@ -936,14 +963,14 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
-      H<E5, MergedPath, I4> & M4,
-      H<E6, MergedPath, I5> & M5,
-      H<E7, MergedPath, I6> & M6,
-      H<E8, MergedPath, I7> & M7,
-      H<E9, MergedPath, I8> & M8,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, MergedPath, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, MergedPath, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, MergedPath, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
+      H<E8, MergedPath, I7> & M7 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7]>>,
+      H<E9, MergedPath, I8> & M8 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7, E8]>>,
       H<E10, MergedPath, I9, R>,
     ]
   ): HonoBase<
@@ -1006,15 +1033,15 @@ export interface HandlerInterface<
   >(
     path: P,
     ...handlers: [
-      H<E2, MergedPath, I> & M1,
-      H<E3, MergedPath, I2> & M2,
-      H<E4, MergedPath, I3> & M3,
-      H<E5, MergedPath, I4> & M4,
-      H<E6, MergedPath, I5> & M5,
-      H<E7, MergedPath, I6> & M6,
-      H<E8, MergedPath, I7> & M7,
-      H<E9, MergedPath, I8> & M8,
-      H<E10, MergedPath, I9> & M9,
+      H<E2, MergedPath, I> & M1 & ProvidesNeeds<IntersectNonAnyTypes<[E]>>,
+      H<E3, MergedPath, I2> & M2 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2]>>,
+      H<E4, MergedPath, I3> & M3 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3]>>,
+      H<E5, MergedPath, I4> & M4 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4]>>,
+      H<E6, MergedPath, I5> & M5 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5]>>,
+      H<E7, MergedPath, I6> & M6 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6]>>,
+      H<E8, MergedPath, I7> & M7 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7]>>,
+      H<E9, MergedPath, I8> & M8 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7, E8]>>,
+      H<E10, MergedPath, I9> & M9 & ProvidesNeeds<IntersectNonAnyTypes<[E, E2, E3, E4, E5, E6, E7, E8, E9]>>,
       H<E11, MergedPath, I10, R>,
     ]
   ): HonoBase<
@@ -1046,13 +1073,16 @@ export interface HandlerInterface<
     I extends Input = BlankInput,
     R extends HandlerResponse<any> = any,
   >(
-    ...handlers: H<E, P, I, R>[]
+    ...handlers: (H<E, P, I, R> & ProvidesNeeds<E>)[]
   ): HonoBase<E, S & ToSchema<M, P, I, MergeTypedResponse<R>>, BasePath, CurrentPath>
 
   // app.get(path, ...handlers[])
   <P extends string, I extends Input = BlankInput, R extends HandlerResponse<any> = any>(
     path: P,
-    ...handlers: [H<E, MergePath<BasePath, P>, I, R>, ...H<E, MergePath<BasePath, P>, I, R>[]]
+    ...handlers: [
+      H<E, MergePath<BasePath, P>, I, R> & ProvidesNeeds<E>,
+      ...(H<E, MergePath<BasePath, P>, I, R> & ProvidesNeeds<E>)[],
+    ]
   ): HonoBase<
     E,
     S & ToSchema<M, MergePath<BasePath, P>, I, MergeTypedResponse<R>>,
