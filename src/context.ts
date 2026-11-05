@@ -87,25 +87,33 @@ export type PropsForRenderer = [...Required<Parameters<Renderer>>] extends [unkn
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Layout<T = Record<string, any>> = (props: T) => any
 
+// Declared as methods so that a Context with extra variables is assignable to one that needs fewer:
+// TypeScript checks method parameters bivariantly, but function-typed properties strictly.
+interface VariableAccessors<E extends Env> {
+  get<Key extends keyof E['Variables']>(key: Key): E['Variables'][Key]
+  get<Key extends keyof ContextVariableMap>(key: Key): ContextVariableMap[Key]
+  set<Key extends keyof E['Variables']>(key: Key, value: E['Variables'][Key]): void
+  set<Key extends keyof ContextVariableMap>(key: Key, value: ContextVariableMap[Key]): void
+}
+
 /**
  * Interface for getting context variables.
  *
  * @template E - Environment type.
  */
-interface Get<E extends Env> {
-  <Key extends keyof E['Variables']>(key: Key): E['Variables'][Key]
-  <Key extends keyof ContextVariableMap>(key: Key): ContextVariableMap[Key]
-}
+type Get<E extends Env> = VariableAccessors<E>['get']
+
+// Like IsAny, but E only appears where TypeScript relates it covariantly. The usual
+// `0 extends 1 & T` puts T in the extends clause, which TypeScript requires to be identical,
+// and that alone would make Context invariant in E.
+type IsAnyEnv<E> = (E extends never ? true : false) extends false ? false : true
 
 /**
  * Interface for setting context variables.
  *
  * @template E - Environment type.
  */
-interface Set<E extends Env> {
-  <Key extends keyof E['Variables']>(key: Key, value: E['Variables'][Key]): void
-  <Key extends keyof ContextVariableMap>(key: Key, value: ContextVariableMap[Key]): void
-}
+type Set<E extends Env> = VariableAccessors<E>['set']
 
 /**
  * Interface for creating a new response.
@@ -549,7 +557,7 @@ export class Context<
    * ```
    */
   set: Set<
-    IsAny<E> extends true
+    IsAnyEnv<E> extends true
       ? {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           Variables: ContextVariableMap & Record<PropertyKey, any>
@@ -574,7 +582,7 @@ export class Context<
    * ```
    */
   get: Get<
-    IsAny<E> extends true
+    IsAnyEnv<E> extends true
       ? {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           Variables: ContextVariableMap & Record<PropertyKey, any>
