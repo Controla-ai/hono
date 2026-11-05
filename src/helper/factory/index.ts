@@ -13,6 +13,7 @@ import type {
   Input,
   IntersectNonAnyTypes,
   MiddlewareHandler,
+  NeedsVariables,
 } from '../../types'
 
 type InitApp<E extends Env = Env> = (app: Hono<E>) => void
@@ -373,3 +374,47 @@ export const createMiddleware = <
 >(
   middleware: MiddlewareHandler<E, P, I, R extends void ? Response : R>
 ): MiddlewareHandler<E, P, I, R extends void ? Response : R> => middleware
+
+type MiddlewareEnvs = { needs?: Env; adds?: Env }
+type EnvOr<E> = E extends Env ? E : {}
+
+/**
+ * Like `createMiddleware`, but names what the middleware needs from earlier
+ * middleware and what it adds for later handlers. Both are typed inside the
+ * middleware; only `adds` flows on, and route methods refuse the middleware
+ * where nothing before it sets `needs`.
+ *
+ * @example
+ * ```ts
+ * const limitByUser = defineMiddleware<{ needs: { Variables: { user: User } } }>(
+ *   async (c, next) => {
+ *     await limiter.check(c.get('user').id)
+ *     await next()
+ *   }
+ * )
+ * app.post('/reset', requireUser, limitByUser, handler) // ok
+ * app.post('/reset', limitByUser, handler) // type error: user is not set before it
+ * ```
+ */
+export const defineMiddleware = <
+  T extends MiddlewareEnvs,
+  P extends string = string,
+  I extends Input = {},
+  R extends HandlerResponse<any> | void = void,
+>(
+  middleware: MiddlewareHandler<
+    IntersectNonAnyTypes<[EnvOr<T['needs']>, EnvOr<T['adds']>]>,
+    P,
+    I,
+    R extends void ? Response : R
+  >
+): MiddlewareHandler<EnvOr<T['adds']>, P, I, R extends void ? Response : R> &
+  NeedsVariables<EnvOr<T['needs']>> =>
+  // Typed with needs and adds inside; outside, only what it adds flows on.
+  middleware as unknown as MiddlewareHandler<
+    EnvOr<T['adds']>,
+    P,
+    I,
+    R extends void ? Response : R
+  > &
+    NeedsVariables<EnvOr<T['needs']>>
